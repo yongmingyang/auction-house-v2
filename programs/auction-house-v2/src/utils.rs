@@ -179,64 +179,61 @@ pub fn assert_keys_equal_err(key1: Pubkey, key2: Pubkey) -> Result<()> {
 }
 
 // #[derive(Debug, Clone)]
-// pub enum BidType {
-//     PublicSale,
-//     PrivateSale,
-//     AuctioneerPublicSale,
-//     AuctioneerPrivateSale,
-// }
+pub enum BidType {
+    // PublicSale,
+    PrivateSale,
+    // AuctioneerPublicSale,
+    // AuctioneerPrivateSale,
+}
 
 // #[derive(Debug, Clone)]
-// pub enum ListingType {
-//     Sell,
-//     AuctioneerSell,
-// }
+pub enum ListingType {
+    Sell,
+}
+
+#[derive(Debug, Clone)]
+pub enum PurchaseType {
+    ExecuteSale,
+}
 
 // #[derive(Debug, Clone)]
-// pub enum PurchaseType {
-//     ExecuteSale,
-//     AuctioneerExecuteSale,
-// }
+pub enum CancelType {
+    Cancel,
+}
 
-// #[derive(Debug, Clone)]
-// pub enum CancelType {
-//     Cancel,
-//     AuctioneerCancel,
-// }
+pub fn assert_program_bid_instruction(sighash: &[u8]) -> Result<BidType> {
+    match sighash {
+        // [169, 84, 218, 35, 42, 206, 16, 171] => Ok(BidType::PublicSale),
+        [102, 6, 61, 18, 1, 218, 235, 234] => Ok(BidType::PrivateSale),
+        // [221, 239, 99, 240, 86, 46, 213, 126] => Ok(BidType::AuctioneerPublicSale),
+        // [17, 106, 133, 46, 229, 48, 45, 208] => Ok(BidType::AuctioneerPrivateSale),
+        _ => Err(AuctionHouseError::InstructionMismatch.into()),
+    }
+}
 
-// pub fn assert_program_bid_instruction(sighash: &[u8]) -> Result<BidType> {
-//     match sighash {
-//         [169, 84, 218, 35, 42, 206, 16, 171] => Ok(BidType::PublicSale),
-//         [102, 6, 61, 18, 1, 218, 235, 234] => Ok(BidType::PrivateSale),
-//         [221, 239, 99, 240, 86, 46, 213, 126] => Ok(BidType::AuctioneerPublicSale),
-//         [17, 106, 133, 46, 229, 48, 45, 208] => Ok(BidType::AuctioneerPrivateSale),
-//         _ => Err(AuctionHouseError::InstructionMismatch.into()),
-//     }
-// }
+pub fn assert_program_listing_instruction(sighash: &[u8]) -> Result<ListingType> {
+    match sighash {
+        [51, 230, 133, 164, 1, 127, 131, 173] => Ok(ListingType::Sell),
+        // [251, 60, 142, 195, 121, 203, 26, 183] => Ok(ListingType::AuctioneerSell),
+        _ => Err(AuctionHouseError::InstructionMismatch.into()),
+    }
+}
 
-// pub fn assert_program_listing_instruction(sighash: &[u8]) -> Result<ListingType> {
-//     match sighash {
-//         [51, 230, 133, 164, 1, 127, 131, 173] => Ok(ListingType::Sell),
-//         [251, 60, 142, 195, 121, 203, 26, 183] => Ok(ListingType::AuctioneerSell),
-//         _ => Err(AuctionHouseError::InstructionMismatch.into()),
-//     }
-// }
+pub fn assert_program_purchase_instruction(sighash: &[u8]) -> Result<PurchaseType> {
+    match sighash {
+        [37, 74, 217, 157, 79, 49, 35, 6] => Ok(PurchaseType::ExecuteSale),
+        // [68, 125, 32, 65, 251, 43, 35, 53] => Ok(PurchaseType::AuctioneerExecuteSale),
+        _ => Err(AuctionHouseError::InstructionMismatch.into()),
+    }
+}
 
-// pub fn assert_program_purchase_instruction(sighash: &[u8]) -> Result<PurchaseType> {
-//     match sighash {
-//         [37, 74, 217, 157, 79, 49, 35, 6] => Ok(PurchaseType::ExecuteSale),
-//         [68, 125, 32, 65, 251, 43, 35, 53] => Ok(PurchaseType::AuctioneerExecuteSale),
-//         _ => Err(AuctionHouseError::InstructionMismatch.into()),
-//     }
-// }
-
-// pub fn assert_program_cancel_instruction(sighash: &[u8]) -> Result<CancelType> {
-//     match sighash {
-//         [232, 219, 223, 41, 219, 236, 220, 190] => Ok(CancelType::Cancel),
-//         [197, 97, 152, 196, 115, 204, 64, 215] => Ok(CancelType::AuctioneerCancel),
-//         _ => Err(AuctionHouseError::InstructionMismatch.into()),
-//     }
-// }
+pub fn assert_program_cancel_instruction(sighash: &[u8]) -> Result<CancelType> {
+    match sighash {
+        [232, 219, 223, 41, 219, 236, 220, 190] => Ok(CancelType::Cancel),
+        // [197, 97, 152, 196, 115, 204, 64, 215] => Ok(CancelType::AuctioneerCancel),
+        _ => Err(AuctionHouseError::InstructionMismatch.into()),
+    }
+}
 
 pub fn assert_program_instruction_equal(sighash: &[u8], expected_sighash: [u8; 8]) -> Result<()> {
     if sighash != expected_sighash {

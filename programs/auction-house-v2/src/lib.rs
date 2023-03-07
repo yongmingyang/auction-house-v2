@@ -1,21 +1,21 @@
 pub mod bid;
-// pub mod cancel;
+pub mod cancel;
 pub mod constants;
 pub mod deposit;
 pub mod errors;
 pub mod execute_sale;
-// pub mod pda;
-// pub mod receipt;
+pub mod pda;
+pub mod receipt;
 pub mod sell;
 pub mod state;
 pub mod utils;
-// pub mod withdraw;
+pub mod withdraw;
 
 pub use state::*;
 
 use crate::{
-    bid::*, /*cancel::*, */constants::*, deposit::*, errors::AuctionHouseError,
-    execute_sale::*, /*receipt::*,*/ sell::*, utils::*, /*withdraw::*,*/
+    bid::*, cancel::*, constants::*, deposit::*, errors::AuctionHouseError,
+    execute_sale::*, receipt::*, sell::*, utils::*, withdraw::*,
 };
 
 use anchor_lang::{
@@ -216,6 +216,91 @@ pub mod auction_house_v2 {
             token_size,
         )
     }
+
+    /// Create a listing receipt by creating a `listing_receipt` account.
+    pub fn print_listing_receipt<'info>(
+        ctx: Context<'_, '_, '_, 'info, PrintListingReceipt<'info>>,
+        receipt_bump: u8,
+    ) -> Result<()> {
+        receipt::print_listing_receipt(ctx, receipt_bump)
+    }
+
+    /// Cancel an active listing receipt by setting the `canceled_at` field to the current time.
+    pub fn cancel_listing_receipt<'info>(
+        ctx: Context<'_, '_, '_, 'info, CancelListingReceipt<'info>>,
+    ) -> Result<()> {
+        receipt::cancel_listing_receipt(ctx)
+    }
+
+    /// Create a bid receipt by creating a `bid_receipt` account.
+    pub fn print_bid_receipt<'info>(
+        ctx: Context<'_, '_, '_, 'info, PrintBidReceipt<'info>>,
+        receipt_bump: u8,
+    ) -> Result<()> {
+        receipt::print_bid_receipt(ctx, receipt_bump)
+    }
+
+    /// Cancel an active bid receipt by setting the `canceled_at` field to the current time.
+    pub fn cancel_bid_receipt<'info>(
+        ctx: Context<'_, '_, '_, 'info, CancelBidReceipt<'info>>,
+    ) -> Result<()> {
+        receipt::cancel_bid_receipt(ctx)
+    }
+
+    /// Create a purchase receipt by creating a `purchase_receipt` account.
+    pub fn print_purchase_receipt<'info>(
+        ctx: Context<'_, '_, '_, 'info, PrintPurchaseReceipt<'info>>,
+        purchase_receipt_bump: u8,
+    ) -> Result<()> {
+        receipt::print_purchase_receipt(ctx, purchase_receipt_bump)
+    }
+
+    pub fn cancel<'info>(
+        ctx: Context<'_, '_, '_, 'info, Cancel<'info>>,
+        buyer_price: u64,
+        token_size: u64,
+    ) -> Result<()> {
+        cancel::cancel(ctx, buyer_price, token_size)
+    }
+
+    /// Withdraw `amount` from the escrow payment account for your specific wallet.
+    pub fn withdraw<'info>(
+        ctx: Context<'_, '_, '_, 'info, Withdraw<'info>>,
+        escrow_payment_bump: u8,
+        amount: u64,
+    ) -> Result<()> {
+        withdraw::withdraw(ctx, escrow_payment_bump, amount)
+    }
+
+    pub fn close_escrow_account<'info>(
+        ctx: Context<'_, '_, '_, 'info, CloseEscrowAccount<'info>>,
+        escrow_payment_bump: u8,
+    ) -> Result<()> {
+        let auction_house_key = ctx.accounts.auction_house.key();
+        let wallet_key = ctx.accounts.wallet.key();
+
+        let escrow_signer_seeds = [
+            PREFIX.as_bytes(),
+            auction_house_key.as_ref(),
+            wallet_key.as_ref(),
+            &[escrow_payment_bump],
+        ];
+
+        invoke_signed(
+            &system_instruction::transfer(
+                &ctx.accounts.escrow_payment_account.key(),
+                &ctx.accounts.wallet.key(),
+                ctx.accounts.escrow_payment_account.lamports(),
+            ),
+            &[
+                ctx.accounts.escrow_payment_account.to_account_info(),
+                ctx.accounts.wallet.to_account_info(),
+                ctx.accounts.system_program.to_account_info(),
+            ],
+            &[&escrow_signer_seeds],
+        )?;
+        Ok(())
+    }
 }
 
 /// Accounts for the [`create_auction_house` handler](auction_house/fn.create_auction_house.html).
@@ -265,4 +350,72 @@ pub struct CreateAuctionHouse<'info> {
     pub system_program: Program<'info, System>,
     pub ata_program: Program<'info, AssociatedToken>,
     pub rent: Sysvar<'info, Rent>,
+}
+
+
+#[derive(Accounts)]
+#[instruction(escrow_payment_bump: u8)]
+pub struct CloseEscrowAccount<'info> {
+    /// User wallet account.
+    pub wallet: Signer<'info>,
+
+    /// CHECK: Account seeds checked in constraint.
+    /// Buyer escrow payment account PDA.
+    #[account(mut, seeds=[PREFIX.as_bytes(), auction_house.key().as_ref(), wallet.key().as_ref()], bump=escrow_payment_bump)]
+    pub escrow_payment_account: UncheckedAccount<'info>,
+
+    /// Auction House instance PDA account.
+    #[account(seeds=[PREFIX.as_bytes(), auction_house.creator.as_ref(), auction_house.treasury_mint.as_ref()], bump=auction_house.bump)]
+    pub auction_house: Account<'info, AuctionHouse>,
+    pub system_program: Program<'info, System>,
+}
+
+/// Accounts for the [`withdraw_from_fee` handler](auction_house/fn.withdraw_from_fee.html).
+#[derive(Accounts)]
+pub struct WithdrawFromFee<'info> {
+    /// Authority key for the Auction House.
+    pub authority: Signer<'info>,
+
+    /// Account that pays for fees if the marketplace executes sales.
+    /// CHECK: User can withdraw wherever as long as they sign as authority.
+    #[account(mut)]
+    pub fee_withdrawal_destination: UncheckedAccount<'info>,
+
+    /// Auction House instance fee account.
+    /// CHECK: Not dangerous. Account seeds checked in constraint.
+    #[account(mut, seeds=[PREFIX.as_bytes(), auction_house.key().as_ref(), FEE_PAYER.as_bytes()], bump=auction_house.fee_payer_bump)]
+    pub auction_house_fee_account: UncheckedAccount<'info>,
+
+    /// Auction House instance PDA account.
+    #[account(mut, seeds=[PREFIX.as_bytes(), auction_house.creator.as_ref(), auction_house.treasury_mint.key().as_ref()], bump=auction_house.bump, has_one=authority, has_one=fee_withdrawal_destination, has_one=auction_house_fee_account)]
+    pub auction_house: Account<'info, AuctionHouse>,
+
+    pub system_program: Program<'info, System>,
+}
+
+/// Accounts for the [`withdraw_from_treasury` handler](auction_house/fn.withdraw_from_treasury.html).
+#[derive(Accounts)]
+pub struct WithdrawFromTreasury<'info> {
+    /// Treasury mint account, either native SOL mint or a SPL token mint.
+    pub treasury_mint: Account<'info, Mint>,
+
+    /// Authority key for the Auction House.
+    pub authority: Signer<'info>,
+
+    /// SOL or SPL token account to receive Auction House fees. If treasury mint is native this will be the same as the `treasury_withdrawl_destination_owner`.
+    /// CHECK: User can withdraw wherever they want as long as they sign as authority.
+    #[account(mut)]
+    pub treasury_withdrawal_destination: UncheckedAccount<'info>,
+
+    /// Auction House treasury PDA account.
+    /// CHECK: Not dangerous. Account seeds checked in constraint.
+    #[account(mut, seeds=[PREFIX.as_bytes(), auction_house.key().as_ref(), TREASURY.as_bytes()], bump=auction_house.treasury_bump)]
+    pub auction_house_treasury: UncheckedAccount<'info>,
+
+    /// Auction House instance PDA account.
+    #[account(mut, seeds=[PREFIX.as_bytes(), auction_house.creator.as_ref(), treasury_mint.key().as_ref()], bump=auction_house.bump, has_one=authority, has_one=treasury_mint, has_one=treasury_withdrawal_destination, has_one=auction_house_treasury)]
+    pub auction_house: Account<'info, AuctionHouse>,
+
+    pub token_program: Program<'info, Token>,
+    pub system_program: Program<'info, System>,
 }

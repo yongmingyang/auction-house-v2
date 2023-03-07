@@ -1,13 +1,15 @@
+// import {
+//   // AuthorityScope,
+//   createCreateAuctionHouseInstruction,
+// } from '@metaplex-foundation/mpl-auction-house';
 import {
-  AuthorityScope,
   createCreateAuctionHouseInstruction,
-} from '@metaplex-foundation/mpl-auction-house';
+} from '../generated/instructions/createAuctionHouse';
 import { PublicKey } from '@solana/web3.js';
-import { SendAndConfirmTransactionResponse } from '../../rpcModule';
-import { WRAPPED_SOL_MINT } from '../../tokenModule';
 import { AuctionHouse } from '../models/AuctionHouse';
-import { TransactionBuilder, TransactionBuilderOptions } from '@/utils';
 import {
+  WRAPPED_SOL_MINT,
+  SendAndConfirmTransactionResponse,
   isSigner,
   makeConfirmOptionsFinalizedOnMainnet,
   Operation,
@@ -17,9 +19,11 @@ import {
   Signer,
   toPublicKey,
   useOperation,
-} from '@/types';
-import type { Metaplex } from '@/Metaplex';
-import { ExpectedSignerError } from '@/errors';
+  TransactionBuilder,
+  TransactionBuilderOptions,
+  ExpectedSignerError
+} from '@metaplex-foundation/js';
+import type { Metaplex } from '@metaplex-foundation/js';
 
 // -----------------
 // Operation
@@ -85,16 +89,6 @@ export type CreateAuctionHouseInput = {
   canChangeSalePrice?: boolean;
 
   /**
-   * The list of scopes available to the user in the Auctioneer.
-   * For example Bid, List, Execute Sale.
-   *
-   * Only takes place when Auction House has Auctioneer enabled.
-   *
-   * @defaultValue `All scopes available`
-   */
-  auctioneerScopes?: AuthorityScope[];
-
-  /**
    * The address of the Auction House treasury mint.
    * The token you accept as the purchase currency.
    *
@@ -123,14 +117,6 @@ export type CreateAuctionHouseInput = {
    * @defaultValue `metaplex.identity()`
    */
   treasuryWithdrawalDestinationOwner?: PublicKey;
-
-  /**
-   * The Auctioneer authority key.
-   * It is required when Auction House is going to have Auctioneer enabled.
-   *
-   * @defaultValue No default value.
-   */
-  auctioneerAuthority?: PublicKey;
 };
 
 /**
@@ -184,7 +170,6 @@ export const createAuctionHouseOperationHandler: OperationHandler<CreateAuctionH
       const auctionHouse = await metaplex.auctionHouse().findByAddress(
         {
           address: output.auctionHouseAddress,
-          auctioneerAuthority: operation.input.auctioneerAuthority,
         },
         scope
       );
@@ -206,7 +191,6 @@ export type CreateAuctionHouseBuilderParams = Omit<
   'confirmOptions'
 > & {
   instructionKey?: string;
-  delegateAuctioneerInstructionKey?: string;
 };
 
 /**
@@ -248,17 +232,6 @@ export const createAuctionHouseBuilder = (
     params.treasuryWithdrawalDestinationOwner ?? metaplex.identity().publicKey;
   const feeWithdrawalDestination =
     params.feeWithdrawalDestination ?? metaplex.identity().publicKey;
-
-  // Auctioneer delegate instruction needs to be signed by authority
-  if (params.auctioneerAuthority && !isSigner(authority)) {
-    throw new ExpectedSignerError(
-      'authority',
-      'PublicKey',
-      'You are trying to delegate to an Auctioneer authority which ' +
-        'requires the Auction House authority to sign a transaction. ' +
-        'But you provided the Auction House authority as a Public Key.'
-    );
-  }
 
   // PDAs.
   const auctionHouse = metaplex
@@ -320,28 +293,6 @@ export const createAuctionHouseBuilder = (
         ),
         signers: [payer],
         key: params.instructionKey ?? 'createAuctionHouse',
-      })
-
-      // Delegate to the Auctioneer authority when provided.
-      .when(Boolean(params.auctioneerAuthority), (builder) => {
-        const auctioneerAuthority = params.auctioneerAuthority as PublicKey;
-        return builder.add({
-          instruction: createDelegateAuctioneerInstruction(
-            {
-              auctionHouse,
-              authority: toPublicKey(authority as Signer),
-              auctioneerAuthority,
-              ahAuctioneerPda: metaplex.auctionHouse().pdas().auctioneer({
-                auctionHouse,
-                auctioneerAuthority,
-                programs,
-              }),
-            },
-            { scopes: params.auctioneerScopes ?? AUCTIONEER_ALL_SCOPES }
-          ),
-          signers: [authority as Signer],
-          key: params.delegateAuctioneerInstructionKey ?? 'delegateAuctioneer',
-        });
       })
   );
 };

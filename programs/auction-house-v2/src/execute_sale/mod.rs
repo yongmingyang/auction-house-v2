@@ -1,4 +1,4 @@
-use crate::{constants::*, errors::*, utils::*, AuctionHouse, AuthorityScope, *};
+use crate::{constants::*, errors::*, utils::*, AuctionHouse, *};
 use anchor_lang::{prelude::*, solana_program::program_pack::Pack, AnchorDeserialize};
 use spl_token::state::Account as SplAccount;
 
@@ -32,7 +32,8 @@ pub struct ExecuteSale<'info> {
     /// CHECK: Validated in execute_sale_logic.
     /// Token mint account for the SPL token.
     pub token_mint: UncheckedAccount<'info>,
-
+    
+    /// CHECK: Validated in execute sale logic
     #[account(
         mut,
         seeds = [

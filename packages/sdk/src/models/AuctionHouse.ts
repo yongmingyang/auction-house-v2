@@ -1,9 +1,8 @@
 import { AuthorityScope } from '@metaplex-foundation/mpl-auction-house';
 import type { PublicKey } from '@solana/web3.js';
 import { AuctionHouseAccount } from '../accounts';
-import { Mint } from '../../tokenModule';
-import { Pda } from '@/types';
-import { assert } from '@/utils';
+import { Mint, Pda } from '@metaplex-foundation/js';
+import { assert } from '@metaplex-foundation/js/src/utils/';
 
 export type AuctionHouse = Readonly<
   {
